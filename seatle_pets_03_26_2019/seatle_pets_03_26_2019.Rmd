@@ -1,0 +1,97 @@
+---
+title: "Seatle Pet Name Analysis"
+author: "Austin Armstrog"
+date: "March 26, 2019"
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(reshape2)
+library(magrittr)
+```
+
+### Grabing the data
+```{r}
+pet_names_raw <- read.csv("https://github.com/rfordatascience/tidytuesday/raw/master/data/2019/2019-03-26/seattle_pets.csv")
+
+
+pet_data_tidy <- pet_names_raw %>%
+  mutate(
+    date = mdy(.$license_issue_date),
+    name = as.character(.$animals_name),
+    zip = as.character(.$zip_code) %>% substr(0,5) %>% as.factor(),
+  ) %>%
+  select(c(-animals_name, -license_issue_date, -zip_code))
+```
+
+
+```{r}
+pet_data_tidy %>% 
+  group_by(species) %>%
+  count() %>%
+  mutate(percent = n/sum(.$n)) %>%
+  filter(percent > 0.1) %>%
+  ggplot +
+  geom_bar(aes(x="", y=percent, fill=species), width=1, stat="identity") +
+  coord_polar("y", start=0) +
+  labs(title="Percentage Dog & Cat Ownership", subtitle = "Seatle, Washington, 2018", x="", y="")
+```
+
+## At what rate are pet adoptions increasing in Seatle
+### And which neighboorhoods are adopting the most pets?
+
+#### What are the zip codes with the highest pet registration rates?
+
+```{r}
+
+cum_reg_by_zip <- pet_data_tidy %>%
+  group_by(zip, date) %>%
+  summarise(num = n()) %>%
+  arrange(date) %>%
+  filter(date > yq("2018:q1")) %>%
+  mutate(num_reg = cumsum(num))
+  
+most_popular_zip <- cum_reg_by_zip %>%
+  group_by(zip) %>%
+  summarise(max_reg = max(num_reg)) %>%
+  arrange(desc(max_reg)) %>%
+  filter(max_reg >= 100) %>%
+  filter(!is.na(zip))
+
+most_popular_zip %>%
+  arrange(desc(max_reg)) %>%
+  ggplot +
+  geom_bar(aes(x=reorder(zip, max_reg), y=max_reg, fill=zip), stat="identity") +
+  coord_flip() +
+  theme(legend.position = "none") +
+  labs(title="Pet Registrations in Seatle by Zip Code in 2018", subtitle="Zip Codes >= 100 registrations", x="Zip Code", y="Number of Registrations")
+
+```
+
+### At what rate have pet registrations been changing in these area codes?
+
+```{r}
+
+
+most_popular_zip %>%
+  left_join(cum_reg_by_zip, by="zip") %>%
+  ggplot +
+  geom_line(aes(x=date, y=num_reg, color=zip)) +
+  theme(legend.position = "none") +
+  labs(title="Cumulitive Pet Registrations vs Date in 2018 by Zip", subtitle = "Seatle, Washington", x="Date", y="Cumulitive Number of Registrations")
+
+
+```
+
+
+To me eyes, there seems to be a natural clustering of the rates of change into 3 groups. We also see some intereting growth pattern correlations between some area codes at different periods of time. It would be interesting to analyze what the reasons of correlated growth are. Perhaps a new pet store opened nearby? Or an adoption center? Lets dive in more to find out.
+
+
+
+
+
+
+
+
